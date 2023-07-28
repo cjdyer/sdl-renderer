@@ -5,27 +5,13 @@
 #include <SDL3/SDL.h>
 #include "types.h"
 #include "camera.h"
-
-static constexpr uint16_t WINDOW_WIDTH_PIXELS = 1280;
-static constexpr uint16_t WINDOW_HEIGHT_PIXELS = 720;
-static constexpr uint8_t MAP_WIDTH = 10;
-static constexpr uint8_t MAP_HEIGHT = 10;
-static constexpr float FOV = M_PI / 3.0; // 60 degrees in radians
-
-static constexpr bool map[MAP_WIDTH][MAP_HEIGHT] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-    {1, 1, 1, 1, 1, 0, 1, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+#include "config.h"
 
 int main()
 {
+    // Init Config
+    config.set_file_path("config.yaml");
+
     // Init System
     if (!SDL_Init(SDL_INIT_EVERYTHING))
     {
@@ -33,7 +19,7 @@ int main()
     }
 
     // Init Window
-    std::unique_ptr<SDL_Window, void (*)(SDL_Window *)> window(SDL_CreateWindow("SDL Renderer", WINDOW_WIDTH_PIXELS, WINDOW_HEIGHT_PIXELS, 0), SDL_DestroyWindow);
+    std::unique_ptr<SDL_Window, void (*)(SDL_Window *)> window(SDL_CreateWindow("SDL Renderer", config.window_dimensions.x, config.window_dimensions.y, 0), SDL_DestroyWindow);
 
     if (!window)
     {
@@ -49,7 +35,7 @@ int main()
     }
 
     // Init Texture
-    std::unique_ptr<SDL_Texture, void (*)(SDL_Texture *)> texture(SDL_CreateTexture(renderer.get(), SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH_PIXELS, WINDOW_HEIGHT_PIXELS), SDL_DestroyTexture);
+    std::unique_ptr<SDL_Texture, void (*)(SDL_Texture *)> texture(SDL_CreateTexture(renderer.get(), SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, config.window_dimensions.x, config.window_dimensions.y), SDL_DestroyTexture);
 
     if (!texture)
     {
@@ -59,7 +45,7 @@ int main()
     // Init Camera
     std::unique_ptr<Camera> camera = std::make_unique<Camera>();
 
-    size_t bufferSize = WINDOW_WIDTH_PIXELS * WINDOW_HEIGHT_PIXELS * sizeof(uint32_t);
+    size_t bufferSize = config.window_dimensions.x * config.window_dimensions.y * sizeof(uint32_t);
     uint32_t *pixels = (uint32_t *)std::malloc(bufferSize);
 
     bool running = true;
@@ -86,29 +72,29 @@ int main()
         // Clear the pixel buffer (fill with black)
         std::memset(pixels, 0, bufferSize);
 
-        for (size_t i = 0; i < WINDOW_WIDTH_PIXELS; i++)
+        for (size_t i = 0; i < config.window_dimensions.x; i++)
         {
-            float rayAngle = camera->get_angle() + (2.0f * i / WINDOW_WIDTH_PIXELS - 1.0f) * FOV;
+            float rayAngle = camera->get_angle() + (2.0f * i / config.window_dimensions.x - 1.0f) * config.feild_of_view;
 
             float x = camera->get_position().x;
             float y = camera->get_position().y;
 
-            while (x >= 0 && y >= 0 && x < MAP_WIDTH && y < MAP_HEIGHT)
+            while (x >= 0 && y >= 0 && x < config.map_dimensions.x && y < config.map_dimensions.y)
             {
                 x += 0.01f * cos(rayAngle);
                 y += 0.01f * sin(rayAngle);
 
-                if (map[(uint8_t)std::round(y)][(uint8_t)std::round(x)] == true)
+                if (config.map[(uint8_t)std::round(y)][(uint8_t)std::round(x)] == true)
                 {
                     break;
                 }
             }
 
             float dist = std::sqrt(std::pow(x - camera->get_position().x, 2) + std::pow(y - camera->get_position().y, 2));
-            int lineHeight = WINDOW_HEIGHT_PIXELS / dist;
+            float lineHeight = config.window_dimensions.y / dist;
 
-            int lineStart = std::max(0, WINDOW_HEIGHT_PIXELS / 2 - lineHeight / 2);
-            int lineEnd = std::min((int)WINDOW_HEIGHT_PIXELS, WINDOW_HEIGHT_PIXELS / 2 + lineHeight / 2);
+            int lineStart = std::max(0.0f, config.window_dimensions.y / 2.0f - lineHeight / 2.0f);
+            int lineEnd = std::min(config.window_dimensions.y, config.window_dimensions.y / 2.0f + lineHeight / 2.0f);
 
             for (int j = lineStart; j < lineEnd; ++j)
             {
@@ -116,7 +102,7 @@ int main()
                 uint8_t colorFactor = (int)(255 / (1 + 0.1 * dist));
 
                 // Red color in RGBA format, fading with distance
-                pixels[j * WINDOW_WIDTH_PIXELS + i] = (colorFactor << 24) | (colorFactor << 16) | (colorFactor << 8) | 0xFF;
+                pixels[j * (uint16_t)config.window_dimensions.x + i] = (colorFactor << 24) | (colorFactor << 16) | (colorFactor << 8) | 0xFF;
             }
         }
 
@@ -126,12 +112,12 @@ int main()
 
         SDL_LockTexture(texture.get(), nullptr, &px, &pitch);
         {
-            for (size_t y = 0; y < WINDOW_HEIGHT_PIXELS; y++)
+            for (size_t y = 0; y < config.window_dimensions.y; y++)
             {
                 memcpy(
                     &((uint8_t *)px)[y * pitch],
-                    &pixels[y * WINDOW_WIDTH_PIXELS],
-                    WINDOW_WIDTH_PIXELS * 4);
+                    &pixels[y * (uint16_t)config.window_dimensions.x],
+                    config.window_dimensions.x * 4);
             }
         }
         SDL_UnlockTexture(texture.get());

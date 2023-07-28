@@ -1,0 +1,19 @@
+window_width: 1280
+window_height: 720
+map_width: 10
+map_height: 10
+feild_of_view: 1.0472
+acceleration: 0.005
+max_velocity: 0.5
+
+map:
+  - [true, true, true, true, true, true, true, true, true, true]
+  - [true, false, false, false, false, false, false, false, false, true]
+  - [true, false, false, false, false, false, false, false, false, true]
+  - [true, false, false, false, false, false, false, false, false, true]
+  - [true, false, false, false, false, false, false, false, false, true]
+  - [true, false, false, false, false, false, true, false, false, true]
+  - [true, true, true, true, true, false, true, false, false, true]
+  - [true, false, false, false, false, false, true, false, false, true]
+  - [true, false, false, false, false, false, true, false, false, true]
+  - [true, true, true, true, true, true, true, true, true, true]
