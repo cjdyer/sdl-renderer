@@ -10,6 +10,8 @@ static constexpr uint16_t WINDOW_HEIGHT_PIXELS = 720;
 static constexpr uint8_t MAP_WIDTH = 10;
 static constexpr uint8_t MAP_HEIGHT = 10;
 static constexpr float FOV = M_PI / 3.0; // 60 degrees in radians
+static constexpr float ACCELERATION = 0.005f;
+static constexpr float MAX_VELOCITY = 0.5f;
 
 struct Vec2
 {
@@ -19,6 +21,7 @@ struct Vec2
 struct
 {
     Vec2 position;
+    Vec2 velocity;
     float angle;
 } camera;
 
@@ -70,6 +73,8 @@ int main()
     uint32_t *pixels = (uint32_t *)std::malloc(bufferSize);
 
     camera.angle = 0.0f;
+    camera.velocity.x = 0.0f;
+    camera.velocity.y = 0.0f;
     camera.position.x = 2.0f;
     camera.position.y = 2.0f;
 
@@ -95,12 +100,12 @@ int main()
                     camera.angle += 0.1f;
                     break;
                 case SDLK_w:
-                    camera.position.x += 0.1f * std::cos(camera.angle);
-                    camera.position.y += 0.1f * std::sin(camera.angle);
+                    camera.velocity.x += ACCELERATION * std::cos(camera.angle);
+                    camera.velocity.y += ACCELERATION * std::sin(camera.angle);
                     break;
                 case SDLK_s:
-                    camera.position.x -= 0.1f * std::cos(camera.angle);
-                    camera.position.y -= 0.1f * std::sin(camera.angle);
+                    camera.velocity.x -= ACCELERATION * std::cos(camera.angle);
+                    camera.velocity.y -= ACCELERATION * std::sin(camera.angle);
                     break;
                 }
                 break;
@@ -111,6 +116,21 @@ int main()
         {
             break;
         }
+
+        float speed = std::sqrt(camera.velocity.x * camera.velocity.x + camera.velocity.y * camera.velocity.y);
+        if (speed > MAX_VELOCITY)
+        {
+            camera.velocity.x = (camera.velocity.x / speed) * MAX_VELOCITY;
+            camera.velocity.y = (camera.velocity.y / speed) * MAX_VELOCITY;
+        }
+
+        // Update the camera position using velocity
+        camera.position.x += camera.velocity.x;
+        camera.position.y += camera.velocity.y;
+
+        // Dampen the velocity a little bit every frame
+        camera.velocity.x *= 0.9f;
+        camera.velocity.y *= 0.9f;
 
         // Clear the pixel buffer (fill with black)
         std::memset(pixels, 0, bufferSize);
