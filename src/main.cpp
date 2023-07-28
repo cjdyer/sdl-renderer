@@ -142,17 +142,11 @@ int main()
         void *px;
         int pitch;
 
-        SDL_LockTexture(texture.get(), nullptr, &px, &pitch);
         {
-            for (size_t y = 0; y < config.window_dimensions.y; y++)
-            {
-                memcpy(
-                    &((uint8_t *)px)[y * pitch],
-                    &pixels[y * (uint16_t)config.window_dimensions.x],
-                    config.window_dimensions.x * 4);
-            }
+            SDL_LockTexture(texture.get(), nullptr, &px, &pitch);
+            memcpy(px, pixels, bufferSize);
+            SDL_UnlockTexture(texture.get());
         }
-        SDL_UnlockTexture(texture.get());
 
         SDL_RenderTexture(renderer.get(), texture.get(), nullptr, nullptr);
         SDL_RenderPresent(renderer.get());
