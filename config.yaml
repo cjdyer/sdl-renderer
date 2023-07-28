@@ -1,7 +1,5 @@
 window_width: 1280
 window_height: 720
-map_width: 10
-map_height: 10
 feild_of_view: 1.0472
 acceleration: 0.005
 max_velocity: 0.5

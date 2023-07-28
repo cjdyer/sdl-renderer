@@ -10,11 +10,12 @@ struct Config
     void set_file_path(const std::string &file_path);
 
     Vec2 window_dimensions;
-    Vec2 map_dimensions;
     float feild_of_view;
     float acceleration;
     float max_velocity;
+
     std::vector<std::vector<bool>> map;
+    Vec2 map_dimensions;
 };
 
 static Config config;
