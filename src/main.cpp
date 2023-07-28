@@ -67,9 +67,6 @@ int main()
     const uint16_t test = config.window_dimensions.x / thread_count;
     const uint16_t half_window_height = config.window_dimensions.y / 2.0f;
 
-    auto t1 = std::chrono::high_resolution_clock::now();
-    uint8_t count = 0;
-
     bool running = true;
     while (running)
     {
@@ -135,7 +132,7 @@ int main()
                     const uint16_t line_end = std::min(config.window_dimensions.y, half_window_height + wall_height / 2.0f);
 
                     // Calculate a brightness based on distance
-                    const uint8_t brightness = 255 / (1 + distance_to_camera);
+                    const uint8_t brightness = 255 / (1 + 0.1f * distance_to_camera);
 
                     for (size_t pixels_y = line_start; pixels_y < line_end; pixels_y++)
                     {
@@ -166,18 +163,6 @@ int main()
 
         SDL_RenderTexture(renderer.get(), texture.get(), nullptr, nullptr);
         SDL_RenderPresent(renderer.get());
-
-        if (count == 10)
-        {
-            count = 0;
-            auto t2 = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-            t1 = std::chrono::high_resolution_clock::now();
-
-            std::cout << ms_double.count() << "ms\n";
-        }
-
-        count++;
     }
 
     SDL_Quit();
