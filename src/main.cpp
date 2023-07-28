@@ -10,10 +10,6 @@
 #include "camera.h"
 #include "config.h"
 
-// Get the number of supported threads
-uint32_t num_threads = std::thread::hardware_concurrency();
-std::vector<std::thread> threads(num_threads);
-
 std::unique_ptr<SDL_Window, void (*)(SDL_Window *)> setup_window(const Config &config)
 {
     SDL_Window *window = SDL_CreateWindow("SDL Renderer", config.window_dimensions.x, config.window_dimensions.y, 0);
@@ -61,8 +57,18 @@ int main()
 
     std::unique_ptr<Camera> camera = std::make_unique<Camera>();
 
-    size_t bufferSize = config.window_dimensions.x * config.window_dimensions.y * sizeof(uint32_t);
-    uint32_t *pixels = (uint32_t *)std::malloc(bufferSize);
+    // Get the number of supported threads and setup pool
+    uint32_t thread_count = std::thread::hardware_concurrency();
+    std::vector<std::thread> thread_pool(thread_count);
+
+    size_t buffer_size = config.window_dimensions.x * config.window_dimensions.y * sizeof(uint32_t);
+    uint32_t *pixels = (uint32_t *)malloc(buffer_size);
+
+    const uint16_t test = config.window_dimensions.x / thread_count;
+    const uint16_t half_window_height = config.window_dimensions.y / 2.0f;
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    uint8_t count = 0;
 
     bool running = true;
     while (running)
@@ -82,60 +88,70 @@ int main()
             break;
         }
 
-        // Get the state of the keyboard
+        // Update Camera with keyboard input
         camera->update(SDL_GetKeyboardState(NULL));
 
+        const float &camera_x = camera->get_position().x;
+        const float &camera_y = camera->get_position().y;
+        const float &camera_angle = camera->get_angle();
+
+        const float ray_angle_base = camera_angle - config.feild_of_view;
+        const float ray_angle_increment = 2.0f * config.feild_of_view / config.window_dimensions.x;
+
         // Clear the pixel buffer (fill with black)
-        std::memset(pixels, 0, bufferSize);
+        memset(pixels, 0, buffer_size);
 
         // Divide work among threads
-        for (unsigned int t = 0; t < num_threads; ++t)
+        for (unsigned int t = 0; t < thread_count; t++)
         {
-            threads[t] = std::thread([t, &camera, pixels]
-                                     {
+            thread_pool[t] = std::thread([=]
+                                         {
                 // Calculate the start and end of the workload for this thread
-                size_t start_i = config.window_dimensions.x / num_threads * t;
-                size_t end_i = t == num_threads - 1 ? config.window_dimensions.x : config.window_dimensions.x / num_threads * (t + 1);
+                size_t start_i = test * t;
+                size_t end_i = t == thread_count - 1 ? config.window_dimensions.x : test * (t + 1);
 
-                for (size_t i = start_i; i < end_i; i++)
+                for (size_t pixels_x = start_i; pixels_x < end_i; ++pixels_x)
                 {
-                    float rayAngle = camera->get_angle() + (2.0f * i / config.window_dimensions.x - 1.0f) * config.feild_of_view;
+                    float ray_angle = ray_angle_base + ray_angle_increment * pixels_x;
 
-                    float x = camera->get_position().x;
-                    float y = camera->get_position().y;
+                    float ray_x = camera_x;
+                    float ray_y = camera_y;
 
-                    while (x >= 0 && y >= 0 && x < config.map_dimensions.x && y < config.map_dimensions.y)
+                    while (ray_x >= 0 && ray_y >= 0 && ray_x < config.map_dimensions.x && ray_y < config.map_dimensions.y)
                     {
-                        x += 0.01f * cos(rayAngle);
-                        y += 0.01f * sin(rayAngle);
+                        ray_x += 0.01f * cos(ray_angle);
+                        ray_y += 0.01f * sin(ray_angle);
 
-                        if (config.map[(uint8_t)std::round(y)][(uint8_t)std::round(x)] == true)
+                        if (config.map[(uint8_t)ray_y][(uint8_t)ray_x] == true)
                         {
                             break;
                         }
                     }
 
-                    float dist = std::sqrt(std::pow(x - camera->get_position().x, 2) + std::pow(y - camera->get_position().y, 2));
-                    float lineHeight = config.window_dimensions.y / dist;
+                    const float distance_to_camera = std::sqrt(std::pow(ray_x - camera_x, 2) + std::pow(ray_y - camera_y, 2));
+                    const float wall_height = config.window_dimensions.y / distance_to_camera;
 
-                    int lineStart = std::max(0.0f, config.window_dimensions.y / 2.0f - lineHeight / 2.0f);
-                    int lineEnd = std::min(config.window_dimensions.y, config.window_dimensions.y / 2.0f + lineHeight / 2.0f);
+                    const uint16_t line_start = std::max(0, half_window_height - (uint16_t)(wall_height / 2.0f));
+                    const uint16_t line_end = std::min(config.window_dimensions.y, half_window_height + wall_height / 2.0f);
 
-                    for (int j = lineStart; j < lineEnd; ++j)
+                    // Calculate a brightness based on distance
+                    const uint8_t brightness = 255 / (1 + distance_to_camera);
+
+                    for (size_t pixels_y = line_start; pixels_y < line_end; pixels_y++)
                     {
-                        // Calculate a color factor based on distance
-                        uint8_t colorFactor = (int)(255 / (1 + 0.1 * dist));
-
-                        // Red color in RGBA format, fading with distance
-                        pixels[j * (uint16_t)config.window_dimensions.x + i] = (colorFactor << 24) | (colorFactor << 16) | (colorFactor << 8) | 0xFF;
+                        // Apply brightness to the pixel
+                        pixels[pixels_y * (uint16_t)config.window_dimensions.x + pixels_x] = (brightness << 24) | (brightness << 16) | (brightness << 8) | 0xFF;
                     }
                 } });
         }
 
         // Join all threads
-        for (auto &th : threads)
+        for (auto &thread : thread_pool)
         {
-            th.join();
+            if (thread.joinable())
+            {
+                thread.join();
+            }
         }
 
         /// Copy the pixel data to the texture and render it
@@ -144,12 +160,24 @@ int main()
 
         {
             SDL_LockTexture(texture.get(), nullptr, &px, &pitch);
-            memcpy(px, pixels, bufferSize);
+            memcpy(px, pixels, buffer_size);
             SDL_UnlockTexture(texture.get());
         }
 
         SDL_RenderTexture(renderer.get(), texture.get(), nullptr, nullptr);
         SDL_RenderPresent(renderer.get());
+
+        if (count == 10)
+        {
+            count = 0;
+            auto t2 = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+            t1 = std::chrono::high_resolution_clock::now();
+
+            std::cout << ms_double.count() << "ms\n";
+        }
+
+        count++;
     }
 
     SDL_Quit();
