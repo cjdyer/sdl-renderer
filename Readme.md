@@ -1,6 +1,9 @@
 # SDL Renderer
 
-This is a simple 3D raycasting engine built with SDL3 and C++. The engine takes an array of booleans to create a map and then uses a multi-threaded raycasting technique to render the 3D scene in real-time.
+This is a simple one day 3D raycasting engine built with SDL3 and C++. The engine takes an array of booleans to create a map and then uses a multi-threaded raycasting technique to render the 3D scene in real-time.
+
+![](./examples/example_1.png)
+![](./examples/example_2.png)
 
 ## Getting Started
 
