@@ -2,28 +2,15 @@
 #include <memory>
 #include <cmath>
 #include <cstring>
-#include <vector>
 #include <SDL3/SDL.h>
+#include "types.h"
+#include "camera.h"
 
 static constexpr uint16_t WINDOW_WIDTH_PIXELS = 1280;
 static constexpr uint16_t WINDOW_HEIGHT_PIXELS = 720;
 static constexpr uint8_t MAP_WIDTH = 10;
 static constexpr uint8_t MAP_HEIGHT = 10;
 static constexpr float FOV = M_PI / 3.0; // 60 degrees in radians
-static constexpr float ACCELERATION = 0.005f;
-static constexpr float MAX_VELOCITY = 0.5f;
-
-struct Vec2
-{
-    float x, y;
-};
-
-struct
-{
-    Vec2 position;
-    Vec2 velocity;
-    float angle;
-} camera;
 
 static constexpr bool map[MAP_WIDTH][MAP_HEIGHT] = {
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
@@ -69,14 +56,11 @@ int main()
         std::cout << "SDL Texture Creation Failed: " << SDL_GetError() << std::endl;
     }
 
+    // Init Camera
+    std::unique_ptr<Camera> camera = std::make_unique<Camera>();
+
     size_t bufferSize = WINDOW_WIDTH_PIXELS * WINDOW_HEIGHT_PIXELS * sizeof(uint32_t);
     uint32_t *pixels = (uint32_t *)std::malloc(bufferSize);
-
-    camera.angle = 0.0f;
-    camera.velocity.x = 0.0f;
-    camera.velocity.y = 0.0f;
-    camera.position.x = 2.0f;
-    camera.position.y = 2.0f;
 
     bool running = true;
     while (running)
@@ -97,53 +81,17 @@ int main()
         }
 
         // Get the state of the keyboard
-        const uint8_t *state = SDL_GetKeyboardState(NULL);
-
-        // Check the state of the relevant keys
-        if (state[SDL_SCANCODE_A])
-        {
-            camera.angle -= 0.01f;
-        }
-        else if (state[SDL_SCANCODE_D])
-        {
-            camera.angle += 0.01f;
-        }
-
-        if (state[SDL_SCANCODE_W])
-        {
-            camera.velocity.x += ACCELERATION * std::cos(camera.angle);
-            camera.velocity.y += ACCELERATION * std::sin(camera.angle);
-        }
-        else if (state[SDL_SCANCODE_S])
-        {
-            camera.velocity.x -= ACCELERATION * std::cos(camera.angle);
-            camera.velocity.y -= ACCELERATION * std::sin(camera.angle);
-        }
-
-        float speed = std::sqrt(camera.velocity.x * camera.velocity.x + camera.velocity.y * camera.velocity.y);
-        if (speed > MAX_VELOCITY)
-        {
-            camera.velocity.x = (camera.velocity.x / speed) * MAX_VELOCITY;
-            camera.velocity.y = (camera.velocity.y / speed) * MAX_VELOCITY;
-        }
-
-        // Update the camera position using velocity
-        camera.position.x += camera.velocity.x;
-        camera.position.y += camera.velocity.y;
-
-        // Dampen the velocity a little bit every frame
-        camera.velocity.x *= 0.9f;
-        camera.velocity.y *= 0.9f;
+        camera->update(SDL_GetKeyboardState(NULL));
 
         // Clear the pixel buffer (fill with black)
         std::memset(pixels, 0, bufferSize);
 
         for (size_t i = 0; i < WINDOW_WIDTH_PIXELS; i++)
         {
-            float rayAngle = camera.angle + (2.0f * i / WINDOW_WIDTH_PIXELS - 1.0f) * FOV;
+            float rayAngle = camera->get_angle() + (2.0f * i / WINDOW_WIDTH_PIXELS - 1.0f) * FOV;
 
-            float x = camera.position.x;
-            float y = camera.position.y;
+            float x = camera->get_position().x;
+            float y = camera->get_position().y;
 
             while (x >= 0 && y >= 0 && x < MAP_WIDTH && y < MAP_HEIGHT)
             {
@@ -156,7 +104,7 @@ int main()
                 }
             }
 
-            float dist = std::sqrt(std::pow(x - camera.position.x, 2) + std::pow(y - camera.position.y, 2));
+            float dist = std::sqrt(std::pow(x - camera->get_position().x, 2) + std::pow(y - camera->get_position().y, 2));
             int lineHeight = WINDOW_HEIGHT_PIXELS / dist;
 
             int lineStart = std::max(0, WINDOW_HEIGHT_PIXELS / 2 - lineHeight / 2);
