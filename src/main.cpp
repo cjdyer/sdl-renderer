@@ -84,30 +84,9 @@ int main()
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
-            switch (event.type)
+            if (event.type == SDL_EVENT_QUIT)
             {
-            case SDL_EVENT_QUIT:
                 running = false;
-                break;
-
-            case SDL_EVENT_KEY_DOWN:
-                switch (event.key.keysym.sym)
-                {
-                case SDLK_a:
-                    camera.angle -= 0.1f;
-                    break;
-                case SDLK_d:
-                    camera.angle += 0.1f;
-                    break;
-                case SDLK_w:
-                    camera.velocity.x += ACCELERATION * std::cos(camera.angle);
-                    camera.velocity.y += ACCELERATION * std::sin(camera.angle);
-                    break;
-                case SDLK_s:
-                    camera.velocity.x -= ACCELERATION * std::cos(camera.angle);
-                    camera.velocity.y -= ACCELERATION * std::sin(camera.angle);
-                    break;
-                }
                 break;
             }
         }
@@ -115,6 +94,30 @@ int main()
         if (!running)
         {
             break;
+        }
+
+        // Get the state of the keyboard
+        const uint8_t *state = SDL_GetKeyboardState(NULL);
+
+        // Check the state of the relevant keys
+        if (state[SDL_SCANCODE_A])
+        {
+            camera.angle -= 0.01f;
+        }
+        else if (state[SDL_SCANCODE_D])
+        {
+            camera.angle += 0.01f;
+        }
+
+        if (state[SDL_SCANCODE_W])
+        {
+            camera.velocity.x += ACCELERATION * std::cos(camera.angle);
+            camera.velocity.y += ACCELERATION * std::sin(camera.angle);
+        }
+        else if (state[SDL_SCANCODE_S])
+        {
+            camera.velocity.x -= ACCELERATION * std::cos(camera.angle);
+            camera.velocity.y -= ACCELERATION * std::sin(camera.angle);
         }
 
         float speed = std::sqrt(camera.velocity.x * camera.velocity.x + camera.velocity.y * camera.velocity.y);
