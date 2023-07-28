@@ -1,11 +1,18 @@
 #include <iostream>
+#include <cstring>
 #include <memory>
 #include <cmath>
-#include <cstring>
+#include <thread>
+
 #include <SDL3/SDL.h>
+
 #include "types.h"
 #include "camera.h"
 #include "config.h"
+
+// Get the number of supported threads
+uint32_t num_threads = std::thread::hardware_concurrency();
+std::vector<std::thread> threads(num_threads);
 
 int main()
 {
@@ -72,38 +79,54 @@ int main()
         // Clear the pixel buffer (fill with black)
         std::memset(pixels, 0, bufferSize);
 
-        for (size_t i = 0; i < config.window_dimensions.x; i++)
+        // Divide work among threads
+        for (unsigned int t = 0; t < num_threads; ++t)
         {
-            float rayAngle = camera->get_angle() + (2.0f * i / config.window_dimensions.x - 1.0f) * config.feild_of_view;
+            threads[t] = std::thread([t, &camera, pixels]
+                                     {
+            // Calculate the start and end of the workload for this thread
+            size_t start_i = config.window_dimensions.x / num_threads * t;
+            size_t end_i = t == num_threads - 1 ? config.window_dimensions.x : config.window_dimensions.x / num_threads * (t + 1);
 
-            float x = camera->get_position().x;
-            float y = camera->get_position().y;
-
-            while (x >= 0 && y >= 0 && x < config.map_dimensions.x && y < config.map_dimensions.y)
+            for (size_t i = start_i; i < end_i; i++)
             {
-                x += 0.01f * cos(rayAngle);
-                y += 0.01f * sin(rayAngle);
+                float rayAngle = camera->get_angle() + (2.0f * i / config.window_dimensions.x - 1.0f) * config.feild_of_view;
 
-                if (config.map[(uint8_t)std::round(y)][(uint8_t)std::round(x)] == true)
+                float x = camera->get_position().x;
+                float y = camera->get_position().y;
+
+                while (x >= 0 && y >= 0 && x < config.map_dimensions.x && y < config.map_dimensions.y)
                 {
-                    break;
+                    x += 0.01f * cos(rayAngle);
+                    y += 0.01f * sin(rayAngle);
+
+                    if (config.map[(uint8_t)std::round(y)][(uint8_t)std::round(x)] == true)
+                    {
+                        break;
+                    }
                 }
-            }
 
-            float dist = std::sqrt(std::pow(x - camera->get_position().x, 2) + std::pow(y - camera->get_position().y, 2));
-            float lineHeight = config.window_dimensions.y / dist;
+                float dist = std::sqrt(std::pow(x - camera->get_position().x, 2) + std::pow(y - camera->get_position().y, 2));
+                float lineHeight = config.window_dimensions.y / dist;
 
-            int lineStart = std::max(0.0f, config.window_dimensions.y / 2.0f - lineHeight / 2.0f);
-            int lineEnd = std::min(config.window_dimensions.y, config.window_dimensions.y / 2.0f + lineHeight / 2.0f);
+                int lineStart = std::max(0.0f, config.window_dimensions.y / 2.0f - lineHeight / 2.0f);
+                int lineEnd = std::min(config.window_dimensions.y, config.window_dimensions.y / 2.0f + lineHeight / 2.0f);
 
-            for (int j = lineStart; j < lineEnd; ++j)
-            {
-                // Calculate a color factor based on distance
-                uint8_t colorFactor = (int)(255 / (1 + 0.1 * dist));
+                for (int j = lineStart; j < lineEnd; ++j)
+                {
+                    // Calculate a color factor based on distance
+                    uint8_t colorFactor = (int)(255 / (1 + 0.1 * dist));
 
-                // Red color in RGBA format, fading with distance
-                pixels[j * (uint16_t)config.window_dimensions.x + i] = (colorFactor << 24) | (colorFactor << 16) | (colorFactor << 8) | 0xFF;
-            }
+                    // Red color in RGBA format, fading with distance
+                    pixels[j * (uint16_t)config.window_dimensions.x + i] = (colorFactor << 24) | (colorFactor << 16) | (colorFactor << 8) | 0xFF;
+                }
+            } });
+        }
+
+        // Join all threads
+        for (auto &th : threads)
+        {
+            th.join();
         }
 
         /// Copy the pixel data to the texture and render it
