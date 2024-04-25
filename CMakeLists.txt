@@ -9,6 +9,7 @@ include_directories(include)
 add_executable(${PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/camera.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp
 )
 

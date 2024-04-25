@@ -3,12 +3,17 @@
 #include <memory>
 #include <cmath>
 #include <thread>
+#include <map>
 
 #include <SDL3/SDL.h>
 
 #include "types.h"
 #include "camera.h"
 #include "config.h"
+#include <cache.h>
+
+const int FPS_LIMIT = 60;
+const int FRAME_DELAY = 1000 / FPS_LIMIT; // milliseconds per frame
 
 void drawCharacter(uint32_t *pixels, char c, int x, int y, int size, uint32_t screen_width) {
     const uint32_t white = 0xFFFFFFFF;  // White color in ARGB format
@@ -142,6 +147,7 @@ int main()
     // Get the number of supported threads and setup pool
     uint32_t thread_count = std::thread::hardware_concurrency();
     std::vector<std::thread> thread_pool(thread_count);
+    LRUCache cache(10000);
 
     size_t buffer_size = config.window_dimensions.x * config.window_dimensions.y * sizeof(uint32_t);
     uint32_t *pixels = (uint32_t *)malloc(buffer_size);
@@ -185,8 +191,7 @@ int main()
 
         frameCount++;
 
-        const float &camera_x = camera->get_position().x;
-        const float &camera_y = camera->get_position().y;
+        const Vec2 &camera_position = camera->get_position();
         const float &camera_angle = camera->get_angle();
 
         const float ray_angle_base = camera_angle - config.feild_of_view;
@@ -198,8 +203,7 @@ int main()
         // Divide work among threads
         for (unsigned int t = 0; t < thread_count; t++)
         {
-            thread_pool[t] = std::thread([=]
-                                         {
+            thread_pool[t] = std::thread([=, &cache] {
                 // Calculate the start and end of the workload for this thread
                 size_t start_i = test * t;
                 size_t end_i = t == thread_count - 1 ? config.window_dimensions.x : test * (t + 1);
@@ -207,22 +211,28 @@ int main()
                 for (size_t pixels_x = start_i; pixels_x < end_i; ++pixels_x)
                 {
                     float ray_angle = ray_angle_base + ray_angle_increment * pixels_x;
+                    CachedRay ray = { ray_angle, camera_position };
+                    float distance_to_camera = cache.get(ray);
 
-                    float ray_x = camera_x;
-                    float ray_y = camera_y;
+                    if (distance_to_camera == -1.0) {
+                        float ray_x = camera_position.x;
+                        float ray_y = camera_position.y;
 
-                    while (ray_x >= 0 && ray_y >= 0 && ray_x < config.map_dimensions.x && ray_y < config.map_dimensions.y)
-                    {
-                        ray_x += 0.01f * cos(ray_angle);
-                        ray_y += 0.01f * sin(ray_angle);
-
-                        if (config.map[(uint8_t)ray_y][(uint8_t)ray_x] == true)
+                        while (ray_x >= 0 && ray_y >= 0 && ray_x < config.map_dimensions.x && ray_y < config.map_dimensions.y)
                         {
-                            break;
+                            ray_x += 0.01f * cos(ray_angle);
+                            ray_y += 0.01f * sin(ray_angle);
+
+                            if (config.map[(uint8_t)ray_y][(uint8_t)ray_x] == true)
+                            {
+                                break;
+                            }
                         }
+
+                        distance_to_camera = std::sqrt(std::pow(ray_x - camera_position.x, 2) + std::pow(ray_y - camera_position.y, 2));
+                        cache.put(ray, distance_to_camera);
                     }
 
-                    const float distance_to_camera = std::sqrt(std::pow(ray_x - camera_x, 2) + std::pow(ray_y - camera_y, 2));
                     const float wall_height = config.window_dimensions.y / distance_to_camera;
 
                     const uint16_t line_start = std::max(0, half_window_height - (uint16_t)(wall_height / 2.0f));
@@ -242,19 +252,21 @@ int main()
         // Join all threads
         for (auto &thread : thread_pool)
         {
-            if (thread.joinable())
+            if (!thread.joinable())
             {
-                thread.join();
+                continue;
             }
+
+            thread.join();
         }
 
         drawString(pixels, fpsText, 10, 10, 20, config.window_dimensions.x); 
 
-        /// Copy the pixel data to the texture and render it
-        void *px;
-        int pitch;
-
         {
+            /// Copy the pixel data to the texture and render it
+            void *px;
+            int pitch;
+
             SDL_LockTexture(texture.get(), nullptr, &px, &pitch);
             memcpy(px, pixels, buffer_size);
             SDL_UnlockTexture(texture.get());
@@ -262,6 +274,11 @@ int main()
 
         SDL_RenderTexture(renderer.get(), texture.get(), nullptr, nullptr);
         SDL_RenderPresent(renderer.get());
+
+        const uint32_t frameTime = SDL_GetTicks() - fpsCurrentTime;
+        if (FRAME_DELAY > frameTime) {
+            SDL_Delay(FRAME_DELAY - frameTime);
+        }
     }
 
     SDL_Quit();

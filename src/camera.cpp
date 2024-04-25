@@ -13,11 +13,11 @@ void Camera::update(const uint8_t *keyboard_state)
     // Check the state of the relevant keys
     if (keyboard_state[SDL_SCANCODE_A])
     {
-        m_angle -= 0.01f;
+        m_angle -= 0.02f;
     }
     else if (keyboard_state[SDL_SCANCODE_D])
     {
-        m_angle += 0.01f;
+        m_angle += 0.02f;
     }
 
     if (keyboard_state[SDL_SCANCODE_W])
