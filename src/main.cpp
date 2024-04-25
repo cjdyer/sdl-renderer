@@ -22,7 +22,7 @@ std::unique_ptr<SDL_Window, void (*)(SDL_Window *)> setup_window(const Config &c
 
 std::unique_ptr<SDL_Renderer, void (*)(SDL_Renderer *)> setup_renderer(SDL_Window *window)
 {
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL, SDL_RENDERER_PRESENTVSYNC);
     if (!renderer)
     {
         std::cout << "SDL Renderer Creation Failed: " << SDL_GetError() << std::endl;
@@ -46,9 +46,12 @@ int main()
     // Init Components
     config.set_file_path("config.yaml");
 
-    if (!SDL_Init(SDL_INIT_EVERYTHING))
+    int init_code = SDL_Init(SDL_INIT_EVERYTHING);
+
+    if (init_code != 0)
     {
         std::cout << "SDL Init Failed: " << SDL_GetError() << std::endl;
+        return init_code;
     }
 
     std::unique_ptr<SDL_Window, void (*)(SDL_Window *)> window = setup_window(config);
